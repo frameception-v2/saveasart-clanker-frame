@@ -22,17 +22,33 @@ import { createStore } from "mipd";
 import { Label } from "~/components/ui/label";
 import { PROJECT_TITLE } from "~/lib/constants";
 
-function ExampleCard() {
+function ClankerPriceCard({ price, loading, error }: { price?: number; loading: boolean; error?: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Welcome to the Frame Template</CardTitle>
-        <CardDescription>
-          This is an example card that you can customize or remove
-        </CardDescription>
+        <CardTitle>$CLANKER Price</CardTitle>
+        <CardDescription>Real-time price tracking</CardDescription>
       </CardHeader>
       <CardContent>
-        <Label>Place content in a Card here.</Label>
+        {loading && !error && (
+          <div className="animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          </div>
+        )}
+        {error && (
+          <div className="text-red-500 text-sm">{error}</div>
+        )}
+        {price !== undefined && !error && (
+          <div className="space-y-2">
+            <div className="text-3xl font-bold">
+              ${price.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+            </div>
+            <Label className="text-sm text-muted-foreground">
+              Contract: {truncateAddress(CLANKER_CONTRACT_ADDRESS)}
+            </Label>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -41,6 +57,40 @@ function ExampleCard() {
 export default function Frame() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [context, setContext] = useState<Context.FrameContext>();
+  const [price, setPrice] = useState<number>();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
+
+  const fetchClankerPrice = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(undefined);
+      
+      const response = await fetch(
+        `${COINGECKO_API_URL}?contract_addresses=${CLANKER_CONTRACT_ADDRESS}&vs_currencies=usd`
+      );
+      
+      if (!response.ok) throw new Error('Failed to fetch price');
+      
+      const data = await response.json();
+      const price = data[CLANKER_CONTRACT_ADDRESS.toLowerCase()]?.usd;
+      
+      if (!price) throw new Error('Invalid price data');
+      
+      setPrice(price);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch price');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchClankerPrice();
+    const interval = setInterval(fetchClankerPrice, 60000);
+    return () => clearInterval(interval);
+  }, [fetchClankerPrice]);
 
   const [added, setAdded] = useState(false);
 
@@ -140,7 +190,7 @@ export default function Frame() {
         <h1 className="text-2xl font-bold text-center mb-4 text-gray-700 dark:text-gray-300">
           {PROJECT_TITLE}
         </h1>
-        <ExampleCard />
+        <ClankerPriceCard price={price} loading={loading} error={error} />
       </div>
     </div>
   );
